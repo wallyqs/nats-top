@@ -5,8 +5,14 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"time"
 
 	"github.com/nats-io/gnatsd/server"
+)
+
+const (
+	MAX_MONITORING_RETRIES = 5
+	RETRY_WAIT             = 1 // second
 )
 
 // Takes a path and options, then returns a serialized connz, varz, or routez response
@@ -24,22 +30,55 @@ func Request(path string, opts map[string]interface{}) (interface{}, error) {
 		return nil, fmt.Errorf("invalid path '%s' for stats server", path)
 	}
 
-	resp, err := http.Get(uri)
-	if err != nil {
-		return nil, fmt.Errorf("error fetching %s: %v", path, err)
-	}
+	successch := make(chan bool)
+	failurech := make(chan error)
 
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("error reading stat from upstream: %s", err)
-	}
+	go func() {
+		var e error
+		for retries := 0; ; retries++ {
+			if retries >= 1 {
+				// Backoff for a bit before polling again
+				fmt.Printf("\033[2J\033[1;1HCould not monitor gnatsd, backing off for %ds... (retries=%d)\n", RETRY_WAIT, retries)
+				time.Sleep(RETRY_WAIT * time.Second)
+			}
 
-	err = json.Unmarshal(body, &statz)
-	if err != nil {
-		return nil, fmt.Errorf("error unmarshaling json: %v", err)
-	}
+			if retries >= MAX_MONITORING_RETRIES {
+				successch <- false
+				failurech <- e
+				break
+			}
 
-	return statz, nil
+			resp, err := http.Get(uri)
+			if err != nil {
+				e = fmt.Errorf("could not get stats from server: %v\n", err)
+				continue
+			}
+
+			defer resp.Body.Close()
+			body, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				e = fmt.Errorf("could not read response from upstream: %v\n", err)
+				continue
+			}
+
+			err = json.Unmarshal(body, &statz)
+			if err != nil {
+				e = fmt.Errorf("could not unmarshal json: %v\n", err)
+				continue
+			}
+
+			successch <- true
+			break
+		}
+	}()
+
+	success := <-successch
+	if success {
+		return statz, nil
+	} else {
+		err := <-failurech
+		return nil, err
+	}
 }
 
 // Takes a float and returns a human readable string

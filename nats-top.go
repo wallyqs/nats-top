@@ -20,11 +20,11 @@ import (
 const natsTopVersion = "1.0.0"
 
 var (
-	host   = flag.String("s", "127.0.0.1", "The nats server host")
-	port   = flag.Int("m", 8333, "The nats server monitoring port")
-	conns  = flag.Int("n", 1024, "Num of connections")
-	delay  = flag.Int("d", 1, "Delay in monitoring interval in seconds")
-	sortBy = flag.String("sort", "cid", "Value for which to sort by the connections")
+	host        = flag.String("s", "127.0.0.1", "The nats server host")
+	port        = flag.Int("m", 8333, "The nats server monitoring port")
+	conns       = flag.Int("n", 1024, "Num of connections")
+	delay       = flag.Int("d", 1, "Delay in monitoring interval in seconds")
+	sortBy      = flag.String("sort", "cid", "Value for which to sort by the connections")
 	showVersion = flag.Bool("v", false, "Show nats-top version")
 )
 
@@ -178,7 +178,6 @@ func StartSimpleUI(opts map[string]interface{}) {
 		// Periodically poll for the varz, connz and routez
 		var varz *server.Varz
 		go func() {
-			var err error
 			defer wg.Done()
 
 			result, err := Request("/varz", opts)
@@ -193,7 +192,6 @@ func StartSimpleUI(opts map[string]interface{}) {
 
 		var connz *server.Connz
 		go func() {
-			var err error
 			defer wg.Done()
 
 			result, err := Request("/connz", opts)
