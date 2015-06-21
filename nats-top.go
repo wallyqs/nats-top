@@ -17,9 +17,7 @@ import (
 	. "github.com/nats-io/nats-top/util"
 )
 
-func usage() {
-	log.Fatalf("Usage: nats-top [-s server] [-m monitor_port] [-n num_connections] [-d delay_secs] [--sort by]\n")
-}
+const natsTopVersion = "1.0.0"
 
 var (
 	host   = flag.String("s", "127.0.0.1", "The nats server host")
@@ -27,7 +25,12 @@ var (
 	conns  = flag.Int("n", 1024, "Num of connections")
 	delay  = flag.Int("d", 1, "Delay in monitoring interval in seconds")
 	sortBy = flag.String("sort", "cid", "Value for which to sort by the connections")
+	showVersion = flag.Bool("v", false, "Show nats-top version")
 )
+
+func usage() {
+	log.Fatalf("Usage: nats-top [-s server] [-m monitor_port] [-n num_connections] [-d delay_secs] [--sort by]\n")
+}
 
 func init() {
 	log.SetFlags(0)
@@ -36,6 +39,12 @@ func init() {
 }
 
 func main() {
+
+	if *showVersion {
+		log.Printf("nats-top v%s", natsTopVersion)
+		os.Exit(0)
+	}
+
 	opts := make(map[string]interface{})
 	opts["host"] = *host
 	opts["port"] = *port
