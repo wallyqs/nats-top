@@ -89,7 +89,6 @@ func main() {
 	waitingSortOption := false
 
 	signal.Notify(sigch, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
-	clearScreen()
 	go StartSimpleUI(opts)
 	go listenKeyboard(keych)
 
@@ -287,6 +286,7 @@ func StartSimpleUI(opts map[string]interface{}) {
 				conn.Lang, conn.Version)
 			text += connLine
 		}
+		clearScreen()
 		fmt.Print(text)
 
 		// Move cursor to sort by options position
