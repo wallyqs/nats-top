@@ -246,13 +246,13 @@ func StartSimpleUI(opts map[string]interface{}) {
 			outMsgs, outBytes, outMsgsRate, outBytesRate)
 		text += fmt.Sprintf("\n\nConnections: %d\n", numConns)
 
-		connHeader := "  %-20s %-8s %-6s  %-10s  %-10s  %-10s  %-10s  %-10s  %-10s  %-10s\n"
+		connHeader := "  %-20s %-8s %-6s  %-10s  %-10s  %-10s  %-10s  %-10s  %-7s  %-7s\n"
 
 		connRows := fmt.Sprintf(connHeader, "HOST", "CID", "SUBS", "PENDING",
 			"MSGS_TO", "MSGS_FROM", "BYTES_TO", "BYTES_FROM",
 			"LANG", "VERSION")
 		text += connRows
-		connValues := "  %-20s %-8d %-6d  %-10d  %-10s  %-10s  %-10s  %-10s  %-10s  %-10s\n"
+		connValues := "  %-20s %-8d %-6d  %-10d  %-10s  %-10s  %-10s  %-10s  %-7s  %-7s\n"
 
 		switch opts["sort"] {
 		case "cid":
