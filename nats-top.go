@@ -171,11 +171,74 @@ func StartDashboardUI(opts map[string]interface{}, varzch chan *server.Varz, con
        	}
         defer ui.Close()
 
-	//      === Current Layout ===
+	// cpu and conns share the same space in the grid so handled differently
+	cpuChart := ui.NewGauge()
+        cpuChart.Border.Label = "Cpu: "
+        cpuChart.Height = ui.TermHeight() / 7
+	cpuChart.BarColor = ui.ColorGreen
+	cpuChart.PercentColor = ui.ColorBlue
+
+        connsChart := ui.NewLineChart()
+        connsChart.Border.Label = "Connections: "
+        connsChart.Height = ui.TermHeight() / 5
+	connsChart.Mode = "dot"
+        connsChart.AxesColor = ui.ColorWhite
+        connsChart.LineColor = ui.ColorYellow | ui.AttrBold
+  	connsChart.Data = []float64{ 0 }
+
+	// All other boxes of the same size
+	boxHeight := ui.TermHeight() / 3
+
+        memChart := ui.NewLineChart()
+        memChart.Border.Label = "Memory: "
+        memChart.Height = boxHeight
+	memChart.Mode = "dot"
+        memChart.AxesColor = ui.ColorWhite
+        memChart.LineColor = ui.ColorYellow | ui.AttrBold
+	memChart.Data = []float64{ 0.0 }
+
+	inMsgsChartLine := ui.Sparkline{}
+	inMsgsChartLine.Height = boxHeight - boxHeight / 7
+	inMsgsChartLine.LineColor = ui.ColorCyan
+	inMsgsChartLine.TitleColor = ui.ColorWhite
+	inMsgsChartBox := ui.NewSparklines(inMsgsChartLine)
+	inMsgsChartLine.Data = []int{ 0 }
+	inMsgsChartBox.Height = boxHeight
+	inMsgsChartBox.Border.Label = "In Msgs/Sec: "
+
+	inBytesChartLine := ui.Sparkline{}
+	inBytesChartLine.Height = boxHeight - boxHeight / 7
+	inBytesChartLine.LineColor = ui.ColorCyan
+	inBytesChartLine.TitleColor = ui.ColorWhite
+	inBytesChartLine.Data = []int{ 0 }
+	inBytesChartBox := ui.NewSparklines(inBytesChartLine)
+	inBytesChartBox.Height = boxHeight
+	inBytesChartBox.Border.Label = "In Bytes/Sec: "
+
+	outMsgsChartLine := ui.Sparkline{}
+	outMsgsChartLine.Height = boxHeight - boxHeight / 7
+	outMsgsChartLine.LineColor = ui.ColorGreen
+	outMsgsChartLine.TitleColor = ui.ColorWhite
+	outMsgsChartLine.Data = []int{ 0 }
+	outMsgsChartBox := ui.NewSparklines(outMsgsChartLine)
+	outMsgsChartBox.Height = boxHeight
+	outMsgsChartBox.Border.Label = "Out Msgs/Sec: "
+	
+	outBytesChartLine := ui.Sparkline{}
+	outBytesChartLine.Height = boxHeight - boxHeight / 7
+	outBytesChartLine.LineColor = ui.ColorGreen
+	outBytesChartLine.TitleColor = ui.ColorWhite
+	outBytesChartLine.Data = []int{ 0 }
+	outBytesChartBox := ui.NewSparklines(outBytesChartLine)
+	outBytesChartBox.Height = boxHeight
+	outBytesChartBox.Border.Label = "Out Bytes/Sec: "
+
+	// ======== Current Layout =========
 	//
         // ....cpu.........  ...mem.........
         // .              .  .             .
-        // ....conss.......  .             .
+        // .              .  .             .
+	// ....conns.......  .             .
         // .              .  .             .
         // .              .  .             .
         // ................  ...............
@@ -194,67 +257,17 @@ func StartDashboardUI(opts map[string]interface{}, varzch chan *server.Varz, con
         // .              .  .             .
         // ................  ...............
 	//
-
-	cpuChart := ui.NewGauge()
-        cpuChart.Border.Label = "Cpu: "
-        cpuChart.Height = ui.TermHeight() / 7
-	cpuChart.BarColor = ui.ColorGreen
-	cpuChart.PercentColor = ui.ColorBlue
-
-	connsChart := ui.NewLineChart()
-        connsChart.Border.Label = "Connections: "
-        connsChart.Height = ui.TermHeight() / 5
-	connsChart.Mode = "dot"
-        connsChart.AxesColor = ui.ColorWhite
-        connsChart.LineColor = ui.ColorYellow | ui.AttrBold
-	
-        memChart := ui.NewLineChart()
-        memChart.Border.Label = "Mem: "
-        memChart.Height = ui.TermHeight() / 3
-	memChart.Mode = "dot"
-        memChart.AxesColor = ui.ColorWhite
-        memChart.LineColor = ui.ColorYellow | ui.AttrBold
-	
-        inMsgsChart := ui.NewLineChart()
-        inMsgsChart.Border.Label = "In Msgs/Sec: "
-        inMsgsChart.Height = ui.TermHeight() / 3
-	inMsgsChart.Mode = "dot"	
-        inMsgsChart.AxesColor = ui.ColorWhite
-        inMsgsChart.LineColor = ui.ColorYellow | ui.AttrBold
-
-        inBytesChart := ui.NewLineChart()
-        inBytesChart.Border.Label = "In Bytes/Sec: "
-        inBytesChart.Height = ui.TermHeight() / 3
-	inBytesChart.Mode = "dot"
-        inBytesChart.AxesColor = ui.ColorWhite
-        inBytesChart.LineColor = ui.ColorYellow | ui.AttrBold
-
-        outMsgsChart := ui.NewLineChart()
-        outMsgsChart.Border.Label = "Out Msgs/Sec: "
-        outMsgsChart.Height = ui.TermHeight() / 3
-	outMsgsChart.Mode = "dot"
-        outMsgsChart.AxesColor = ui.ColorWhite
-        outMsgsChart.LineColor = ui.ColorYellow | ui.AttrBold
-
-        outBytesChart := ui.NewLineChart()
-        outBytesChart.Border.Label = "Out Bytes/Sec: "
-        outBytesChart.Height = ui.TermHeight() / 3
-	outBytesChart.Mode = "dot"	
-        outBytesChart.AxesColor = ui.ColorWhite
-        outBytesChart.LineColor = ui.ColorYellow | ui.AttrBold
-	
-        // build layout
         ui.Body.AddRows(
                 ui.NewRow(
 			ui.NewCol(6, 0, cpuChart, connsChart),
 			ui.NewCol(6, 0, memChart),
 		),
                 ui.NewRow(
-			ui.NewCol(6, 0, inMsgsChart),
-			ui.NewCol(6, 0, inBytesChart)),
+			ui.NewCol(6, 0, inMsgsChartBox),
+			ui.NewCol(6, 0, inBytesChartBox)),
                 ui.NewRow(
-			ui.NewCol(6, 0, outMsgsChart),
-			ui.NewCol(6, 0, outBytesChart)),
+			ui.NewCol(6, 0, outMsgsChartBox),
+			ui.NewCol(6, 0, outBytesChartBox)),
 	)
 
         // calculate layout
@@ -327,45 +340,40 @@ func StartDashboardUI(opts map[string]interface{}, varzch chan *server.Varz, con
 			cpuChart.Border.Label = fmt.Sprintf("CPU: %.1f%% ", varz.CPU)
 			cpuChart.Percent = int(varz.CPU)
 
-			// Sparklines
-			memChart.Border.Label = fmt.Sprintf("Memory: %s (%d)", Psize(varz.Mem), len(memChart.Data))
-			memChart.Data = append(memChart.Data, float64(varz.Mem / 1024 / 1024))
-			if len(memChart.Data) > 100 {
-				memChart.Data = memChart.Data[1:100]
-			}
-
 			connsChart.Border.Label = fmt.Sprintf("Connections: %d/%d ", connz.NumConns, varz.Options.MaxConn)
 			connsChart.Data = append(connsChart.Data, float64(connz.NumConns))
-			if len(connsChart.Data) > 100 {
-				connsChart.Data = connsChart.Data[1:100]
-			}
-			// connsChart.Data = append(connsChart.Data, float64(connz.NumConns))
-			// if len(connsChart.Data) > 100 {
-			// 	connsChart.Data = connsChart.Data[1:100]
-			// }
-
-			inMsgsChart.Border.Label = fmt.Sprintf("In: Msgs/Sec: %.1f ", inMsgsRate)
-			inMsgsChart.Data = append(inMsgsChart.Data, inMsgsRate)
-			if len(inMsgsChart.Data) > 100 {
-				inMsgsChart.Data = inMsgsChart.Data[1:100]
-			}
-			
-			inBytesChart.Border.Label = fmt.Sprintf("In: Bytes/Sec: %s ", Psize(int64(inBytesRate)))
-			inBytesChart.Data = append(inBytesChart.Data, inBytesRate)
-			if len(inBytesChart.Data) > 100 {
-				inBytesChart.Data = inBytesChart.Data[1:100]
+			if len(connsChart.Data) > 150 {
+				connsChart.Data = connsChart.Data[1:150]
 			}
 
-			outMsgsChart.Border.Label = fmt.Sprintf("Out: Msgs/Sec: %.1f ", outMsgsRate)
-			outMsgsChart.Data = append(outMsgsChart.Data, outMsgsRate)
-			if len(outMsgsChart.Data) > 100 {
-				outMsgsChart.Data = outMsgsChart.Data[1:100]
+			memChart.Border.Label = fmt.Sprintf("Memory: %s", Psize(varz.Mem))
+			memChart.Data = append(memChart.Data, float64(varz.Mem / 1024 / 1024))
+			if len(memChart.Data) > 150 {
+				memChart.Data = memChart.Data[1:150]
 			}
 
-			outBytesChart.Border.Label = fmt.Sprintf("Out: Bytes/Sec: %s ", Psize(int64(outBytesRate)))
-			outBytesChart.Data = append(outBytesChart.Data, outBytesRate)
-			if len(outBytesChart.Data) > 100 {
-				outBytesChart.Data = outBytesChart.Data[1:100]
+			inMsgsChartBox.Border.Label = fmt.Sprintf("In: Msgs/Sec: %.1f ", inMsgsRate)
+			inMsgsChartBox.Lines[0].Data = append(inMsgsChartBox.Lines[0].Data, int(inMsgsRate))
+			if len(inMsgsChartBox.Lines[0].Data) > 150 {
+				inMsgsChartBox.Lines[0].Data = inMsgsChartBox.Lines[0].Data[1:150]
+			}
+
+			inBytesChartBox.Border.Label = fmt.Sprintf("In: Bytes/Sec: %s ", Psize(int64(inBytesRate)))
+			inBytesChartBox.Lines[0].Data = append(inBytesChartBox.Lines[0].Data, int(inBytesRate))
+			if len(inBytesChartBox.Lines[0].Data) > 150 {
+				inBytesChartBox.Lines[0].Data = inBytesChartBox.Lines[0].Data[1:150]
+			}
+
+			outMsgsChartBox.Border.Label = fmt.Sprintf("Out: Msgs/Sec: %.1f ", outMsgsRate)
+			outMsgsChartBox.Lines[0].Data = append(outMsgsChartBox.Lines[0].Data, int(outMsgsRate))
+			if len(outMsgsChartBox.Lines[0].Data) > 150 {
+				outMsgsChartBox.Lines[0].Data = outMsgsChartBox.Lines[0].Data[1:150]
+			}
+
+			outBytesChartBox.Border.Label = fmt.Sprintf("Out: Bytes/Sec: %s ", Psize(int64(outBytesRate)))
+			outBytesChartBox.Lines[0].Data = append(outBytesChartBox.Lines[0].Data, int(outBytesRate))
+			if len(outBytesChartBox.Lines[0].Data) > 150 {
+				outBytesChartBox.Lines[0].Data = outBytesChartBox.Lines[0].Data[1:150]
 			}
 
 			if first {
@@ -395,11 +403,23 @@ func StartDashboardUI(opts map[string]interface{}, varzch chan *server.Varz, con
 				// Refresh size of boxes accordingly
 				cpuChart.Height = ui.TermHeight() / 7
 				connsChart.Height = ui.TermHeight() / 5
-				memChart.Height = ui.TermHeight() / 3
-				inMsgsChart.Height = ui.TermHeight() / 3
-				outMsgsChart.Height = ui.TermHeight() / 3
-				inBytesChart.Height = ui.TermHeight() / 3
-				outBytesChart.Height = ui.TermHeight() / 3
+
+				boxHeight := ui.TermHeight() / 3
+				lineHeight := boxHeight - boxHeight / 7
+				
+				memChart.Height = boxHeight
+				
+				inMsgsChartBox.Height = boxHeight
+				inMsgsChartBox.Lines[0].Height = lineHeight
+				
+				outMsgsChartBox.Height = boxHeight
+				outMsgsChartBox.Lines[0].Height = lineHeight
+				
+				inBytesChartBox.Height = boxHeight
+				inBytesChartBox.Lines[0].Height = lineHeight
+				
+				outBytesChartBox.Height = boxHeight
+				outBytesChartBox.Lines[0].Height = lineHeight
 
 				ui.Body.Align()
                                 go func() { redraw <- true }()
@@ -413,7 +433,6 @@ func StartDashboardUI(opts map[string]interface{}, varzch chan *server.Varz, con
 }
 
 // Will pass the values to a varz and connz channels
-// StatsLoop
 func GetStats(opts map[string]interface{}, varzch chan *server.Varz, connzch chan *server.Connz) {
         for {
                 // Getting the stats --------------------------------------------------
