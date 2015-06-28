@@ -95,52 +95,15 @@ func main() {
 
 	go GetStats(opts, varzch, connzch, ratesch)
 
-	// Change into render functions?
-	// dont pass the channel just the values
-	switch *uiStyle {
-	case "simple":
-		StartRatesUI(opts, varzch, connzch, ratesch)
-	case "dashboard", "graphs":
-		StartDashboardUI(opts, varzch, connzch, ratesch)
-	default:
-		// keych := make(chan string)
-		// waitingSortOption := false
-		StartRatesUI(opts, varzch, connzch, ratesch)
-
-		// for {
-		//         select {
-		//         case keys := <-keych:
-		//                 if !waitingSortOption && keys == "o\n" {
-		//                         opts["header"] = fmt.Sprintf("\033[1;1H\033[6;1Hsort by [%s]: ", opts["sort"])
-		//                         waitingSortOption = true
-		//                         continue
-		//                 }
-		//                 if !waitingSortOption && keys == "q\n" {
-		//                         cleanExit()
-		//                 }
-
-		//                 if waitingSortOption {
-		//                         switch keys {
-		//                         case "cid\n":
-		//                                 opts["sort"] = "cid"
-		//                         case "subs\n":
-		//                                 opts["sort"] = "subs"
-		//                         case "pending\n":
-		//                                 opts["sort"] = "pending"
-		//                         case "msgs_to\n":
-		//                                 opts["sort"] = "msgs_to"
-		//                         case "msgs_from\n":
-		//                                 opts["sort"] = "msgs_from"
-		//                         case "bytes_to\n":
-		//                                 opts["sort"] = "bytes_to"
-		//                         case "bytes_from\n":
-		//                                 opts["sort"] = "bytes_from"
-		//                         }
-		//                         waitingSortOption = false
-		//                         opts["header"] = ""
-		//                 }
-		//         }
-		// }
+	for {
+		switch *uiStyle {
+		case "simple":
+			StartRatesUI(opts, varzch, connzch, ratesch)
+		case "dashboard", "graphs":
+			StartDashboardUI(opts, varzch, connzch, ratesch)
+		default:
+			StartRatesUI(opts, varzch, connzch, ratesch)
+		}
 	}
 }
 
@@ -149,6 +112,7 @@ func clearScreen() {
 }
 
 func cleanExit() {
+	ui.Close()
 	clearScreen()
 
 	// Show cursor once again
@@ -318,7 +282,6 @@ func StartDashboardUI(opts map[string]interface{}, varzch chan *server.Varz, con
 	}
 
 	evt := ui.EventCh()
-
 	ui.Render(ui.Body)
 	go update()
 
@@ -326,8 +289,18 @@ func StartDashboardUI(opts map[string]interface{}, varzch chan *server.Varz, con
 		select {
 		case e := <-evt:
 			if e.Type == ui.EventKey && e.Ch == 'q' {
+				cleanExit()
+			}
+
+			if e.Type == ui.EventKey && e.Ch == 'n' {
+				*uiStyle = "simple"
+				err := ui.Init()
+				if err != nil {
+					panic(err)
+				}
 				return
 			}
+
 			if e.Type == ui.EventResize {
 				ui.Body.Width = ui.TermWidth()
 
@@ -466,10 +439,8 @@ func GetStats(opts map[string]interface{}, varzch chan *server.Varz, connzch cha
 			first = false
 		}
 
-		// -------------------------------------------------------------------------------
-		// Move cursor to sort by options position
+		// FIXME: Move cursor to sort by options position
 		// fmt.Print(opts["header"])
-		// Handled by UI now
 
 		// Note that delay defines the sampling rate as well
 		if val, ok := opts["delay"].(int); ok {
@@ -481,12 +452,79 @@ func GetStats(opts map[string]interface{}, varzch chan *server.Varz, connzch cha
 	}
 }
 
+func generateParagraph(opts map[string]interface{}, varz *server.Varz, connz *server.Connz, rates map[string]float64) string {
+
+	cpu := varz.CPU
+	numConns := connz.NumConns
+	memVal := varz.Mem
+	inMsgsVal := varz.InMsgs
+	outMsgsVal := varz.OutMsgs
+	inBytesVal := varz.InBytes
+	outBytesVal := varz.OutBytes
+
+	inMsgsRate := rates["inMsgsRate"]
+	outMsgsRate := rates["outMsgsRate"]
+	inBytesRate := rates["inBytesRate"]
+	outBytesRate := rates["outBytesRate"]
+
+	mem := Psize(memVal)
+	inMsgs := Psize(inMsgsVal)
+	outMsgs := Psize(outMsgsVal)
+	inBytes := Psize(inBytesVal)
+	outBytes := Psize(outBytesVal)
+
+	info := "\nServer:\n  Load: CPU: %.1f%%  Memory: %s\n"
+	info += "  In:   Msgs: %s  Bytes: %s  Msgs/Sec: %.1f  Bytes/Sec: %.1f\n"
+	info += "  Out:  Msgs: %s  Bytes: %s  Msgs/Sec: %.1f  Bytes/Sec: %.1f"
+
+	text := fmt.Sprintf(info, cpu, mem,
+		inMsgs, inBytes, inMsgsRate, inBytesRate,
+		outMsgs, outBytes, outMsgsRate, outBytesRate)
+	text += fmt.Sprintf("\n\nConnections: %d\n", numConns)
+
+	connHeader := "  %-20s %-8s %-6s  %-10s  %-10s  %-10s  %-10s  %-10s  %-7s  %-7s\n"
+
+	connRows := fmt.Sprintf(connHeader, "HOST", "CID", "SUBS", "PENDING",
+		"MSGS_TO", "MSGS_FROM", "BYTES_TO", "BYTES_FROM",
+		"LANG", "VERSION")
+	text += connRows
+	connValues := "  %-20s %-8d %-6d  %-10d  %-10s  %-10s  %-10s  %-10s  %-7s  %-7s\n"
+
+	switch opts["sort"] {
+	case "cid":
+		sort.Sort(ByCid(connz.Conns))
+	case "subs":
+		sort.Sort(sort.Reverse(BySubs(connz.Conns)))
+	case "pending":
+		sort.Sort(sort.Reverse(ByPending(connz.Conns)))
+	case "msgs_to":
+		sort.Sort(sort.Reverse(ByMsgsTo(connz.Conns)))
+	case "msgs_from":
+		sort.Sort(sort.Reverse(ByMsgsFrom(connz.Conns)))
+	case "bytes_to":
+		sort.Sort(sort.Reverse(ByBytesTo(connz.Conns)))
+	case "bytes_from":
+		sort.Sort(sort.Reverse(ByBytesFrom(connz.Conns)))
+	}
+
+	for _, conn := range connz.Conns {
+		host := fmt.Sprintf("%s:%d", conn.IP, conn.Port)
+		connLine := fmt.Sprintf(connValues, host, conn.Cid, conn.NumSubs, conn.Pending,
+			Psize(conn.OutMsgs), Psize(conn.InMsgs), Psize(conn.OutBytes), Psize(conn.InBytes),
+			conn.Lang, conn.Version)
+		text += connLine
+	}
+
+	return text
+}
+
 func StartRatesUI(opts map[string]interface{}, varzch chan *server.Varz, connzch chan *server.Connz, ratesch chan map[string]float64) {
 
-	par0 := ui.NewPar("Borderless Text")
-	par0.Height = ui.TermHeight()
-	par0.Width = ui.TermWidth()
-	par0.HasBorder = false
+	text := generateParagraph(opts, &server.Varz{}, &server.Connz{}, map[string]float64{})
+	par := ui.NewPar(text)
+	par.Height = ui.TermHeight()
+	par.Width = ui.TermWidth()
+	par.HasBorder = false
 
 	done := make(chan bool)
 	redraw := make(chan bool)
@@ -497,67 +535,8 @@ func StartRatesUI(opts map[string]interface{}, varzch chan *server.Varz, connzch
 			connz := <-connzch
 			rates := <-ratesch
 
-			cpu := varz.CPU
-			numConns := connz.NumConns
-			memVal := varz.Mem
-			inMsgsVal := varz.InMsgs
-			outMsgsVal := varz.OutMsgs
-			inBytesVal := varz.InBytes
-			outBytesVal := varz.OutBytes
-
-			inMsgsRate := rates["inMsgsRate"]
-			outMsgsRate := rates["outMsgsRate"]
-			inBytesRate := rates["inBytesRate"]
-			outBytesRate := rates["outBytesRate"]
-
-			mem := Psize(memVal)
-			inMsgs := Psize(inMsgsVal)
-			outMsgs := Psize(outMsgsVal)
-			inBytes := Psize(inBytesVal)
-			outBytes := Psize(outBytesVal)
-
-			info := "\nServer:\n  Load: CPU: %.1f%%  Memory: %s\n"
-			info += "  In:   Msgs: %s  Bytes: %s  Msgs/Sec: %.1f  Bytes/Sec: %.1f\n"
-			info += "  Out:  Msgs: %s  Bytes: %s  Msgs/Sec: %.1f  Bytes/Sec: %.1f"
-
-			text := fmt.Sprintf(info, cpu, mem,
-				inMsgs, inBytes, inMsgsRate, inBytesRate,
-				outMsgs, outBytes, outMsgsRate, outBytesRate)
-			text += fmt.Sprintf("\n\nConnections: %d\n", numConns)
-
-			connHeader := "  %-20s %-8s %-6s  %-10s  %-10s  %-10s  %-10s  %-10s  %-7s  %-7s\n"
-
-			connRows := fmt.Sprintf(connHeader, "HOST", "CID", "SUBS", "PENDING",
-				"MSGS_TO", "MSGS_FROM", "BYTES_TO", "BYTES_FROM",
-				"LANG", "VERSION")
-			text += connRows
-			connValues := "  %-20s %-8d %-6d  %-10d  %-10s  %-10s  %-10s  %-10s  %-7s  %-7s\n"
-
-			switch opts["sort"] {
-			case "cid":
-				sort.Sort(ByCid(connz.Conns))
-			case "subs":
-				sort.Sort(sort.Reverse(BySubs(connz.Conns)))
-			case "pending":
-				sort.Sort(sort.Reverse(ByPending(connz.Conns)))
-			case "msgs_to":
-				sort.Sort(sort.Reverse(ByMsgsTo(connz.Conns)))
-			case "msgs_from":
-				sort.Sort(sort.Reverse(ByMsgsFrom(connz.Conns)))
-			case "bytes_to":
-				sort.Sort(sort.Reverse(ByBytesTo(connz.Conns)))
-			case "bytes_from":
-				sort.Sort(sort.Reverse(ByBytesFrom(connz.Conns)))
-			}
-
-			for _, conn := range connz.Conns {
-				host := fmt.Sprintf("%s:%d", conn.IP, conn.Port)
-				connLine := fmt.Sprintf(connValues, host, conn.Cid, conn.NumSubs, conn.Pending,
-					Psize(conn.OutMsgs), Psize(conn.InMsgs), Psize(conn.OutBytes), Psize(conn.InBytes),
-					conn.Lang, conn.Version)
-				text += connLine
-			}
-			par0.Text = text
+			text = generateParagraph(opts, varz, connz, rates)
+			par.Text = text
 
 			redraw <- true
 		}
@@ -565,177 +544,32 @@ func StartRatesUI(opts map[string]interface{}, varzch chan *server.Varz, connzch
 	}
 
 	evt := ui.EventCh()
-	ui.Render(par0)
+	ui.Render(par)
 	go update()
 
 	for {
 		select {
 		case e := <-evt:
 			if e.Type == ui.EventKey && e.Ch == 'q' {
+				cleanExit()
+			}
+			if e.Type == ui.EventKey && e.Ch == 'n' {
+				*uiStyle = "dashboard"
+				ui.Close()
+				err := ui.Init()
+				if err != nil {
+					panic(err)
+				}
 				return
 			}
 			if e.Type == ui.EventResize {
+				ui.Body.Align()
 				go func() { redraw <- true }()
 			}
 		case <-done:
 			return
 		case <-redraw:
-			ui.Render(par0)
-		}
-	}
-}
-
-func StartSimpleUI(opts map[string]interface{}, varzch chan *server.Varz, connzch chan *server.Connz, ratesch chan map[string]float64) {
-	var pollTime time.Time
-
-	var inMsgsDelta int64
-	var outMsgsDelta int64
-	var inBytesDelta int64
-	var outBytesDelta int64
-
-	var inMsgsLastVal int64
-	var outMsgsLastVal int64
-	var inBytesLastVal int64
-	var outBytesLastVal int64
-
-	var inMsgsRate float64
-	var outMsgsRate float64
-	var inBytesRate float64
-	var outBytesRate float64
-
-	first := true
-	pollTime = time.Now()
-	for {
-		wg := &sync.WaitGroup{}
-		wg.Add(2)
-
-		// Periodically poll for the varz, connz and routez
-		var varz *server.Varz
-		go func() {
-			var err error
-			defer wg.Done()
-
-			result, err := Request("/varz", opts)
-			if err != nil {
-				log.Fatalf("Could not get /varz: %v", err)
-			}
-
-			if varzVal, ok := result.(*server.Varz); ok {
-				varz = varzVal
-			}
-		}()
-
-		var connz *server.Connz
-		go func() {
-			var err error
-			defer wg.Done()
-
-			result, err := Request("/connz", opts)
-			if err != nil {
-				log.Fatalf("Could not get /connz: %v", err)
-			}
-
-			if connzVal, ok := result.(*server.Connz); ok {
-				connz = connzVal
-			}
-		}()
-		wg.Wait()
-
-		cpu := varz.CPU
-		numConns := connz.NumConns
-		memVal := varz.Mem
-
-		// Periodic snapshot to get per sec metrics
-		inMsgsVal := varz.InMsgs
-		outMsgsVal := varz.OutMsgs
-		inBytesVal := varz.InBytes
-		outBytesVal := varz.OutBytes
-
-		inMsgsDelta = inMsgsVal - inMsgsLastVal
-		outMsgsDelta = outMsgsVal - outMsgsLastVal
-		inBytesDelta = inBytesVal - inBytesLastVal
-		outBytesDelta = outBytesVal - outBytesLastVal
-
-		inMsgsLastVal = inMsgsVal
-		outMsgsLastVal = outMsgsVal
-		inBytesLastVal = inBytesVal
-		outBytesLastVal = outBytesVal
-
-		now := time.Now()
-		tdelta := now.Sub(pollTime)
-		pollTime = now
-
-		// Calculate rates but the first time
-		if !first {
-			inMsgsRate = float64(inMsgsDelta) / tdelta.Seconds()
-			outMsgsRate = float64(outMsgsDelta) / tdelta.Seconds()
-			inBytesRate = float64(inBytesDelta) / tdelta.Seconds()
-			outBytesRate = float64(outBytesDelta) / tdelta.Seconds()
-		}
-
-		mem := Psize(memVal)
-		inMsgs := Psize(inMsgsVal)
-		outMsgs := Psize(outMsgsVal)
-		inBytes := Psize(inBytesVal)
-		outBytes := Psize(outBytesVal)
-
-		info := "\nServer:\n  Load: CPU: %.1f%%  Memory: %s\n"
-		info += "  In:   Msgs: %s  Bytes: %s  Msgs/Sec: %.1f  Bytes/Sec: %.1f\n"
-		info += "  Out:  Msgs: %s  Bytes: %s  Msgs/Sec: %.1f  Bytes/Sec: %.1f"
-
-		text := fmt.Sprintf(info, cpu, mem,
-			inMsgs, inBytes, inMsgsRate, inBytesRate,
-			outMsgs, outBytes, outMsgsRate, outBytesRate)
-		text += fmt.Sprintf("\n\nConnections: %d\n", numConns)
-
-		connHeader := "  %-20s %-8s %-6s  %-10s  %-10s  %-10s  %-10s  %-10s  %-7s  %-7s\n"
-
-		connRows := fmt.Sprintf(connHeader, "HOST", "CID", "SUBS", "PENDING",
-			"MSGS_TO", "MSGS_FROM", "BYTES_TO", "BYTES_FROM",
-			"LANG", "VERSION")
-		text += connRows
-		connValues := "  %-20s %-8d %-6d  %-10d  %-10s  %-10s  %-10s  %-10s  %-7s  %-7s\n"
-
-		switch opts["sort"] {
-		case "cid":
-			sort.Sort(ByCid(connz.Conns))
-		case "subs":
-			sort.Sort(sort.Reverse(BySubs(connz.Conns)))
-		case "pending":
-			sort.Sort(sort.Reverse(ByPending(connz.Conns)))
-		case "msgs_to":
-			sort.Sort(sort.Reverse(ByMsgsTo(connz.Conns)))
-		case "msgs_from":
-			sort.Sort(sort.Reverse(ByMsgsFrom(connz.Conns)))
-		case "bytes_to":
-			sort.Sort(sort.Reverse(ByBytesTo(connz.Conns)))
-		case "bytes_from":
-			sort.Sort(sort.Reverse(ByBytesFrom(connz.Conns)))
-		}
-
-		for _, conn := range connz.Conns {
-			host := fmt.Sprintf("%s:%d", conn.IP, conn.Port)
-			connLine := fmt.Sprintf(connValues, host, conn.Cid, conn.NumSubs, conn.Pending,
-				Psize(conn.OutMsgs), Psize(conn.InMsgs), Psize(conn.OutBytes), Psize(conn.InBytes),
-				conn.Lang, conn.Version)
-			text += connLine
-		}
-		clearScreen()
-		fmt.Print(text)
-
-		// Move cursor to sort by options position
-		fmt.Print(opts["header"])
-
-		if first {
-			first = false
-		}
-
-		if val, ok := opts["delay"].(int); ok {
-			time.Sleep(time.Duration(val) * time.Second)
-			clearScreen()
-		} else {
-			log.Fatalf("error: could not use %s as a refreshing interval", opts["delay"])
-			break
+			ui.Render(par)
 		}
 	}
 }
