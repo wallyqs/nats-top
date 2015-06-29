@@ -160,7 +160,7 @@ func StartDashboardUI(opts map[string]interface{}, varzch chan *server.Varz, con
 	inMsgsChartBox := ui.NewSparklines(inMsgsChartLine)
 	inMsgsChartLine.Data = []int{0}
 	inMsgsChartBox.Height = boxHeight
-	inMsgsChartBox.Border.Label = "In Msgs/Sec: "
+	inMsgsChartBox.Border.Label = "In: Msgs/Sec: "
 
 	inBytesChartLine := ui.Sparkline{}
 	inBytesChartLine.Height = boxHeight - boxHeight/7
@@ -169,7 +169,7 @@ func StartDashboardUI(opts map[string]interface{}, varzch chan *server.Varz, con
 	inBytesChartLine.Data = []int{0}
 	inBytesChartBox := ui.NewSparklines(inBytesChartLine)
 	inBytesChartBox.Height = boxHeight
-	inBytesChartBox.Border.Label = "In Bytes/Sec: "
+	inBytesChartBox.Border.Label = "In: Bytes/Sec: "
 
 	outMsgsChartLine := ui.Sparkline{}
 	outMsgsChartLine.Height = boxHeight - boxHeight/7
@@ -178,7 +178,7 @@ func StartDashboardUI(opts map[string]interface{}, varzch chan *server.Varz, con
 	outMsgsChartLine.Data = []int{0}
 	outMsgsChartBox := ui.NewSparklines(outMsgsChartLine)
 	outMsgsChartBox.Height = boxHeight
-	outMsgsChartBox.Border.Label = "Out Msgs/Sec: "
+	outMsgsChartBox.Border.Label = "Out: Msgs/Sec: "
 
 	outBytesChartLine := ui.Sparkline{}
 	outBytesChartLine.Height = boxHeight - boxHeight/7
@@ -187,7 +187,7 @@ func StartDashboardUI(opts map[string]interface{}, varzch chan *server.Varz, con
 	outBytesChartLine.Data = []int{0}
 	outBytesChartBox := ui.NewSparklines(outBytesChartLine)
 	outBytesChartBox.Height = boxHeight
-	outBytesChartBox.Border.Label = "Out Bytes/Sec: "
+	outBytesChartBox.Border.Label = "Out: Bytes/Sec: "
 
 	// ======== Current Layout =========
 	//
