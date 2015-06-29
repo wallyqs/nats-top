@@ -120,6 +120,11 @@ func cleanExit() {
 	os.Exit(0)
 }
 
+func exitWithError() {
+	ui.Close()
+	os.Exit(1)
+}
+
 func StartDashboardUI(opts map[string]interface{}, varzch chan *server.Varz, connzch chan *server.Connz, ratesch chan map[string]float64) {
 
 	// cpu and conns share the same space in the grid so handled differently
@@ -370,12 +375,11 @@ func GetStats(opts map[string]interface{}, varzch chan *server.Varz, connzch cha
 		// Periodically poll for the varz, connz and routez
 		var varz *server.Varz
 		go func() {
-			var err error
 			defer wg.Done()
 
 			result, err := Request("/varz", opts)
 			if err != nil {
-				log.Fatalf("Could not get /varz: %v", err)
+				exitWithError()
 			}
 
 			if varzVal, ok := result.(*server.Varz); ok {
@@ -385,12 +389,11 @@ func GetStats(opts map[string]interface{}, varzch chan *server.Varz, connzch cha
 
 		var connz *server.Connz
 		go func() {
-			var err error
 			defer wg.Done()
 
 			result, err := Request("/connz", opts)
 			if err != nil {
-				log.Fatalf("Could not get /connz: %v", err)
+				exitWithError()
 			}
 
 			if connzVal, ok := result.(*server.Connz); ok {
@@ -547,7 +550,7 @@ func StartRatesUI(opts map[string]interface{}, varzch chan *server.Varz, connzch
 	sortOptionBuf := ""
 	refreshSortHeader := func() {
 		// Need to mask what was typed before
-		clrline := "\033[1;1H\033[6;1H             "
+		clrline := "\033[1;1H\033[6;1H                  "
 		for i := 0; i < len(opts["sort"].(string)); i++ {
 			clrline += " "
 		}

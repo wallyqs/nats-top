@@ -5,93 +5,15 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"time"
 
 	"github.com/nats-io/gnatsd/server"
 )
 
-type ByCid []*server.ConnInfo
-
-func (d ByCid) Len() int {
-	return len(d)
-}
-func (d ByCid) Swap(i, j int) {
-	d[i], d[j] = d[j], d[i]
-}
-func (d ByCid) Less(i, j int) bool {
-	return d[i].Cid < d[j].Cid
-}
-
-type BySubs []*server.ConnInfo
-
-func (d BySubs) Len() int {
-	return len(d)
-}
-func (d BySubs) Swap(i, j int) {
-	d[i], d[j] = d[j], d[i]
-}
-func (d BySubs) Less(i, j int) bool {
-	return d[i].NumSubs < d[j].NumSubs
-}
-
-type ByPending []*server.ConnInfo
-
-func (d ByPending) Len() int {
-	return len(d)
-}
-func (d ByPending) Swap(i, j int) {
-	d[i], d[j] = d[j], d[i]
-}
-func (d ByPending) Less(i, j int) bool {
-	return d[i].Pending < d[j].Pending
-}
-
-type ByMsgsTo []*server.ConnInfo
-
-func (d ByMsgsTo) Len() int {
-	return len(d)
-}
-func (d ByMsgsTo) Swap(i, j int) {
-	d[i], d[j] = d[j], d[i]
-}
-func (d ByMsgsTo) Less(i, j int) bool {
-	return d[i].OutMsgs < d[j].OutMsgs
-}
-
-type ByMsgsFrom []*server.ConnInfo
-
-func (d ByMsgsFrom) Len() int {
-	return len(d)
-}
-func (d ByMsgsFrom) Swap(i, j int) {
-	d[i], d[j] = d[j], d[i]
-}
-func (d ByMsgsFrom) Less(i, j int) bool {
-	return d[i].InMsgs < d[j].InMsgs
-}
-
-type ByBytesTo []*server.ConnInfo
-
-func (d ByBytesTo) Len() int {
-	return len(d)
-}
-func (d ByBytesTo) Swap(i, j int) {
-	d[i], d[j] = d[j], d[i]
-}
-func (d ByBytesTo) Less(i, j int) bool {
-	return d[i].OutBytes < d[j].OutBytes
-}
-
-type ByBytesFrom []*server.ConnInfo
-
-func (d ByBytesFrom) Len() int {
-	return len(d)
-}
-func (d ByBytesFrom) Swap(i, j int) {
-	d[i], d[j] = d[j], d[i]
-}
-func (d ByBytesFrom) Less(i, j int) bool {
-	return d[i].InBytes < d[j].InBytes
-}
+const (
+	MAX_MONITORING_RETRIES = 5
+	RETRY_WAIT             = 1 // second
+)
 
 // Takes a path and options, then returns a serialized connz, varz, or routez response
 func Request(path string, opts map[string]interface{}) (interface{}, error) {
@@ -108,22 +30,55 @@ func Request(path string, opts map[string]interface{}) (interface{}, error) {
 		return nil, fmt.Errorf("invalid path '%s' for stats server", path)
 	}
 
-	resp, err := http.Get(uri)
-	if err != nil {
-		return nil, fmt.Errorf("error fetching %s: %v", path, err)
-	}
+	successch := make(chan bool)
+	failurech := make(chan error)
 
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("error reading stat from upstream: %s", err)
-	}
+	go func() {
+		var e error
+		for retries := 0; ; retries++ {
+			if retries >= 1 {
+				// Backoff for a bit before polling again
+				fmt.Printf("\033[1;1HCould not monitor gnatsd, backing off for %ds... (retries=%d)\n", RETRY_WAIT, retries)
+				time.Sleep(RETRY_WAIT * time.Second)
+			}
 
-	err = json.Unmarshal(body, &statz)
-	if err != nil {
-		return nil, fmt.Errorf("error unmarshaling json: %v", err)
-	}
+			if retries >= MAX_MONITORING_RETRIES {
+				successch <- false
+				failurech <- e
+				break
+			}
 
-	return statz, nil
+			resp, err := http.Get(uri)
+			if err != nil {
+				e = fmt.Errorf("could not get stats from server: %v\n", err)
+				continue
+			}
+
+			defer resp.Body.Close()
+			body, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				e = fmt.Errorf("could not read response from upstream: %v\n", err)
+				continue
+			}
+
+			err = json.Unmarshal(body, &statz)
+			if err != nil {
+				e = fmt.Errorf("could not unmarshal json: %v\n", err)
+				continue
+			}
+
+			successch <- true
+			break
+		}
+	}()
+
+	success := <-successch
+	if success {
+		return statz, nil
+	} else {
+		err := <-failurech
+		return nil, err
+	}
 }
 
 // Takes a float and returns a human readable string

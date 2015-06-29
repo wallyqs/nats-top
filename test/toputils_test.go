@@ -1,25 +1,38 @@
 package test
 
 import (
+	"net/http"
 	"testing"
+	"time"
 
 	"github.com/nats-io/gnatsd/server"
-	natstest "github.com/nats-io/gnatsd/test"
+	gnatsd "github.com/nats-io/gnatsd/test"
 	. "github.com/nats-io/nats-top/util"
 )
 
+// Borrowed from gnatsd tests
+const GNATSD_PORT = 11422
+
+func runMonitorServer(monitorPort int) *server.Server {
+	resetPreviousHTTPConnections()
+	opts := gnatsd.DefaultTestOptions
+	opts.Port = GNATSD_PORT
+	opts.HTTPPort = monitorPort
+
+	return gnatsd.RunServer(&opts)
+}
+
+func resetPreviousHTTPConnections() {
+	http.DefaultTransport = &http.Transport{}
+}
+
 func TestFetchingStatz(t *testing.T) {
 	params := make(map[string]interface{})
-	natsHttpPort := 8222
-
 	params["host"] = "127.0.0.1"
-	params["port"] = natsHttpPort
+	params["port"] = server.DEFAULT_HTTP_PORT
 
-	opts := natstest.DefaultTestOptions
-	opts.Port = 8888
-	opts.HTTPPort = natsHttpPort
-
-	s := natstest.RunServer(&opts)
+	s := runMonitorServer(server.DEFAULT_HTTP_PORT)
+	defer s.Shutdown()
 
 	// Getting Varz
 	var varz *server.Varz
@@ -55,6 +68,30 @@ func TestFetchingStatz(t *testing.T) {
 	}
 
 	s.Shutdown()
+}
+
+func TestRequestRetry(t *testing.T) {
+	params := make(map[string]interface{})
+	params["host"] = "127.0.0.1"
+	params["port"] = server.DEFAULT_HTTP_PORT
+
+	var result interface{}
+	var err error
+	done := make(chan bool)
+	go func() {
+		result, err = Request("/varz", params)
+		done <- true
+	}()
+
+	// Delay the start of the server so that the client retries
+	time.Sleep(2 * time.Second)
+	s := runMonitorServer(server.DEFAULT_HTTP_PORT)
+	defer s.Shutdown()
+	<-done
+
+	if err != nil {
+		t.Fatalf("Failed retrying to monitor /varz. got: %v", err)
+	}
 }
 
 func TestPsize(t *testing.T) {
