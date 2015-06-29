@@ -8,17 +8,13 @@ go get github.com/nats-io/nats-top
 Usage: nats-top [-s server] [-m monitor] [-n num_connections] [-d delay_secs] [--sort by]
 ```
 
-Example Output:
+- Bindings
+  + **o**: Enable top like 'sort by' menu  
+  + **space**: Toggle between text and graphs ui mode
+  + **q**: Quit
 
-```sh
-Server:
-  Load: CPU: 0.0% Memory: 5.5M
-  In:   Msgs: 2.2K  Bytes: 8.0K  Msgs/Sec: 1.0  Bytes/Sec: 1.0
-  Out:  Msgs: 2.2K  Bytes: 8.0K  Msgs/Sec: 1.0  Bytes/Sec: 1.0
+[![asciicast](https://asciinema.org/a/6xgidw31a47b3uwrg0uim6083.png)](https://asciinema.org/a/6xgidw31a47b3uwrg0uim6083)
 
-Connections: 1
-  HOST                 CID      SUBS    PENDING     MSGS_TO     MSGS_FROM   BYTES_TO    BYTES_FROM  LANG  VERSION
-  127.0.0.1:56358      4        1       0           1.2K        1.2K        4.5K        4.5K
-```
 
-It also supports ordering during the nats-top session by pressing `o` then `ENTER`.
+
+
