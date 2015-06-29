@@ -44,7 +44,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	opts := make(map[string]interface{})
+	opts := map[string]interface{}{}
 	opts["host"] = *host
 	opts["port"] = *port
 	opts["conns"] = *conns
@@ -292,8 +292,11 @@ func StartDashboardUI(opts map[string]interface{}, varzch chan *server.Varz, con
 				cleanExit()
 			}
 
-			if e.Type == ui.EventKey && e.Ch == 'n' {
+			if e.Type == ui.EventKey && e.Key == ui.KeySpace {
 				*uiStyle = "simple"
+
+				// Refresh the UI
+				ui.Close()
 				err := ui.Init()
 				if err != nil {
 					panic(err)
@@ -439,9 +442,6 @@ func GetStats(opts map[string]interface{}, varzch chan *server.Varz, connzch cha
 			first = false
 		}
 
-		// FIXME: Move cursor to sort by options position
-		// fmt.Print(opts["header"])
-
 		// Note that delay defines the sampling rate as well
 		if val, ok := opts["delay"].(int); ok {
 			time.Sleep(time.Duration(val) * time.Second)
@@ -543,6 +543,21 @@ func StartRatesUI(opts map[string]interface{}, varzch chan *server.Varz, connzch
 		done <- true
 	}
 
+	waitingSortOption := false
+	sortOptionBuf := ""
+	refreshSortHeader := func() {
+		// Need to mask what was typed before
+		clrline := "\033[1;1H\033[6;1H             "
+		for i := 0; i < len(opts["sort"].(string)); i++ {
+			clrline += " "
+		}
+		clrline += "  "
+		for i := 0; i < len(sortOptionBuf); i++ {
+			clrline += " "
+		}
+		fmt.Printf(clrline)
+	}
+
 	evt := ui.EventCh()
 	ui.Render(par)
 	go update()
@@ -550,11 +565,70 @@ func StartRatesUI(opts map[string]interface{}, varzch chan *server.Varz, connzch
 	for {
 		select {
 		case e := <-evt:
+
+			if waitingSortOption {
+				if e.Type == ui.EventKey && e.Key == ui.KeyEnter {
+
+					switch sortOptionBuf {
+					case "cid":
+						opts["sort"] = "cid"
+					case "subs":
+						opts["sort"] = "subs"
+					case "pending":
+						opts["sort"] = "pending"
+					case "msgs_to":
+						opts["sort"] = "msgs_to"
+					case "msgs_from":
+						opts["sort"] = "msgs_from"
+					case "bytes_to":
+						opts["sort"] = "bytes_to"
+					case "bytes_from":
+						opts["sort"] = "bytes_from"
+					default:
+						go func() {
+							// Has to be at least of the same length as sort by header
+							emptyPadding := ""
+							if len(sortOptionBuf) < 5 {
+								emptyPadding = "     "
+							}
+							fmt.Printf("\033[1;1H\033[6;1Hinvalid order: %s%s", emptyPadding, sortOptionBuf)
+							time.Sleep(1 * time.Second)
+							refreshSortHeader()
+							waitingSortOption = false
+							sortOptionBuf = ""
+						}()
+						continue
+					}
+
+					refreshSortHeader()
+					waitingSortOption = false
+					sortOptionBuf = ""
+					continue
+				}
+
+				// Handle backspace
+				if e.Type == ui.EventKey && len(sortOptionBuf) > 0 && (e.Key == ui.KeyBackspace || e.Key == ui.KeyBackspace2) {
+					sortOptionBuf = sortOptionBuf[:len(sortOptionBuf)-1]
+					refreshSortHeader()
+				} else {
+					sortOptionBuf += string(e.Ch)
+				}
+				fmt.Printf("\033[1;1H\033[6;1Hsort by [%s]: %s", opts["sort"], sortOptionBuf)
+			}
+
 			if e.Type == ui.EventKey && e.Ch == 'q' {
 				cleanExit()
 			}
-			if e.Type == ui.EventKey && e.Ch == 'n' {
+
+			if e.Type == ui.EventKey && e.Ch == 'o' {
+				fmt.Printf("\033[1;1H\033[6;1Hsort by [%s]:", opts["sort"])
+				waitingSortOption = true
+			}
+
+			if e.Type == ui.EventKey && e.Key == ui.KeySpace {
 				*uiStyle = "dashboard"
+
+				// Refresh the UI
 				ui.Close()
 				err := ui.Init()
 				if err != nil {
@@ -562,10 +636,12 @@ func StartRatesUI(opts map[string]interface{}, varzch chan *server.Varz, connzch
 				}
 				return
 			}
+
 			if e.Type == ui.EventResize {
 				ui.Body.Align()
 				go func() { redraw <- true }()
 			}
+
 		case <-done:
 			return
 		case <-redraw:
