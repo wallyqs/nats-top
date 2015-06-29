@@ -1,4 +1,4 @@
 
 - [ ] Include /routesz info
-- [ ] Show lang and version of client
+- [X] Show lang and version of client
 - [ ] Dashboard style for metrics
