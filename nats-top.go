@@ -349,7 +349,7 @@ func StartUI(
 	optionBuf := ""
 	refreshOptionHeader := func() {
 		// Need to mask what was typed before
-		clrline := "\033[1;1H\033[6;1H                  "
+		clrline := "\033[1;1H\033[6;1H                        "
 
 		clrline += "  "
 		for i := 0; i < len(optionBuf); i++ {
@@ -381,9 +381,9 @@ func StartUI(
 							// Has to be at least of the same length as sort by header
 							emptyPadding := ""
 							if len(optionBuf) < 5 {
-								emptyPadding = "   "
+								emptyPadding = " "
 							}
-							fmt.Printf("\033[1;1H\033[6;1Hinvalid order: %s%s", emptyPadding, optionBuf)
+							fmt.Printf("\033[1;1H\033[6;1Hinvalid order: %s%s  ", emptyPadding, optionBuf)
 							waitingSortOption = false
 							time.Sleep(1 * time.Second)
 							refreshOptionHeader()
