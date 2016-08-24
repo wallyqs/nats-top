@@ -11,7 +11,7 @@ import (
 	"time"
 
 	gnatsd "github.com/nats-io/gnatsd/server"
-	top "github.com/nats-io/nats-top/util"
+	top "github.com/wallyqs/nats-top/util"
 	ui "gopkg.in/gizak/termui.v1"
 )
 
